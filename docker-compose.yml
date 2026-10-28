@@ -1,0 +1,64 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: repo-insight-postgres
+    environment:
+      POSTGRES_DB: repoinsight
+      POSTGRES_USER: repoinsight
+      POSTGRES_PASSWORD: repoinsight123
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U repoinsight -d repoinsight"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - repo-insight-network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: repo-insight-backend
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/repoinsight
+      SPRING_DATASOURCE_USERNAME: repoinsight
+      SPRING_DATASOURCE_PASSWORD: repoinsight123
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      JWT_SECRET: ${JWT_SECRET:-my_super_secret_jwt_key_change_this_in_production_2024}
+      AI_PROVIDER: ${AI_PROVIDER:-gemini}
+      SERVER_PORT: 8081
+    ports:
+      - "8081:8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - repo_workspaces:/tmp/repo-workspaces
+    networks:
+      - repo-insight-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: repo-insight-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - repo-insight-network
+
+volumes:
+  postgres_data:
+  repo_workspaces:
+
+networks:
+  repo-insight-network:
+    driver: bridge
